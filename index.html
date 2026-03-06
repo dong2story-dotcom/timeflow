@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>TimeFlow</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&family=Noto+Sans+KR:wght@200;300;400&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  height: 100%; width: 100%; overflow: hidden;
+  background: #0a0a0a; color: #efefef;
+  font-family: 'Noto Sans KR', sans-serif; font-weight: 300;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ═══════════════════════════
+   TWO SCREENS — slide transition
+═══════════════════════════ */
+.screen {
+  position: fixed; inset: 0;
+  transition: transform 0.65s cubic-bezier(0.4,0,0.2,1),
+              opacity   0.65s cubic-bezier(0.4,0,0.2,1);
+  will-change: transform;
+}
+
+/* TIMER: normally visible (left) */
+#timer { transform: translateX(0); background: #0a0a0a; z-index: 1; }
+#timer.slide-out { transform: translateX(-100%); }
+
+/* SETTINGS: starts off-screen right */
+#settings {
+  transform: translateX(100%);
+  background: #0d0d0d;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  z-index: 2;
+}
+#settings.slide-in { transform: translateX(0); }
+
+/* ═══════════════════════════
+   TIMER SCREEN
+═══════════════════════════ */
+/* Top bar */
+.top-bar {
+  position: absolute; top: 0; left: 0; right: 0; height: 68px;
+  background: #1a1a1a;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px; z-index: 10;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  transition: transform 0.45s cubic-bezier(0.4,0,0.2,1);
+}
+.top-bar.away { transform: translateY(-100%); }
+
+.top-mission-num  { font-size: 0.54rem; letter-spacing: 0.25em; color: #555; text-transform: uppercase; margin-bottom: 4px; }
+.top-mission-name { font-family: 'Cormorant Garamond', serif; font-size: 1.05rem; font-weight: 300; letter-spacing: 0.18em; color: #efefef; }
+.top-time-range   { font-family: 'Cormorant Garamond', serif; font-size: 0.68rem; letter-spacing: 0.1em; color: #555; }
+
+/* Fill block */
+.fill-block {
+  position: absolute; top: 68px; left: 0; right: 0; bottom: 68px;
+  background: #111; overflow: hidden;
+}
+
+/* Bright color fills from top down */
+.fill-color {
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 0%;
+  background: #cfe84a;
+  transition: height 0.9s linear;
+}
+
+/* subtle scanline on the fill edge */
+.fill-edge {
+  position: absolute; left: 0; right: 0; height: 2px;
+  background: rgba(255,255,255,0.18);
+  top: 0%;
+  transition: top 0.9s linear;
+  pointer-events: none; z-index: 3;
+}
+
+/* ghost name - shows through the fill area */
+.fill-ghost {
+  position: absolute; inset: 0; z-index: 4;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+.fill-ghost-txt {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(1.3rem, 5vw, 2rem); font-weight: 300;
+  letter-spacing: 0.2em; color: rgba(0,0,0,0.12);
+  text-align: center; padding: 0 20px;
+  mix-blend-mode: multiply;
+}
+
+/* current clock */
+.fill-clock {
+  position: absolute; bottom: 16px; right: 18px;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 0.82rem; color: rgba(255,255,255,0.18);
+  letter-spacing: 0.12em; z-index: 5; pointer-events: none;
+}
+
+/* settings swipe hint inside fill */
+.settings-hint {
+  position: absolute; bottom: 16px; left: 18px;
+  font-size: 0.54rem; letter-spacing: 0.18em; color: rgba(255,255,255,0.15);
+  text-transform: uppercase; z-index: 5; pointer-events: none;
+}
+
+/* tap to pause — only over fill area */
+.tap-zone {
+  position: absolute; inset: 0; z-index: 6; cursor: pointer;
+}
+
+/* pause overlay */
+.pause-overlay {
+  position: absolute; inset: 0; z-index: 7;
+  background: rgba(0,0,0,0.55); backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity 0.3s;
+}
+.pause-overlay.show { opacity: 1; pointer-events: all; }
+.pause-txt {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.4rem; font-weight: 300;
+  letter-spacing: 0.4em; color: rgba(255,255,255,0.5);
+}
+
+/* Bottom bar */
+.bottom-bar {
+  position: absolute; bottom: 0; left: 0; right: 0; height: 68px;
+  background: #141414;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px; z-index: 10;
+  border-top: 1px solid rgba(255,255,255,0.04);
+  transition: transform 0.45s cubic-bezier(0.4,0,0.2,1);
+}
+.bottom-bar.away { transform: translateY(100%); }
+.bottom-next-label { font-size: 0.52rem; letter-spacing: 0.22em; color: #444; text-transform: uppercase; margin-bottom: 4px; }
+.bottom-next-name  { font-family: 'Cormorant Garamond', serif; font-size: 0.95rem; font-weight: 300; letter-spacing: 0.14em; color: #777; }
+.bottom-next-time  { font-family: 'Cormorant Garamond', serif; font-size: 0.68rem; letter-spacing: 0.1em; color: #444; }
+
+/* pre-start overlay */
+.prestart {
+  position: absolute; inset: 0; z-index: 20;
+  background: #0a0a0a;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 12px;
+  transition: opacity 0.5s;
+}
+.prestart.gone { opacity: 0; pointer-events: none; }
+.prestart-title { font-family: 'Cormorant Garamond', serif; font-size: 2rem; font-weight: 300; letter-spacing: 0.3em; color: #666; }
+.prestart-sub { font-size: 0.6rem; letter-spacing: 0.28em; color: #333; text-transform: uppercase; }
+.prestart-arrow { font-size: 0.58rem; letter-spacing: 0.2em; color: #333; text-transform: uppercase; margin-top: 24px; }
+
+/* ═══════════════════════════
+   SETTINGS SCREEN
+═══════════════════════════ */
+.settings-inner { padding: 56px 24px 48px; min-height: 100%; display: flex; flex-direction: column; }
+
+.s-title { font-family: 'Cormorant Garamond', serif; font-size: 1.8rem; font-weight: 300; letter-spacing: 0.28em; color: #bbb; margin-bottom: 3px; }
+.s-sub   { font-size: 0.56rem; letter-spacing: 0.32em; color: #444; text-transform: uppercase; margin-bottom: 32px; }
+
+.back-btn {
+  position: absolute; top: 20px; left: 20px;
+  background: none; border: none; cursor: pointer;
+  font-size: 0.6rem; letter-spacing: 0.2em; color: #555;
+  text-transform: uppercase; padding: 6px 0;
+  transition: color 0.2s;
+}
+.back-btn:hover { color: #aaa; }
+
+.mode-row { display: flex; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; overflow: hidden; margin-bottom: 18px; }
+.mode-btn { flex: 1; padding: 12px 8px; background: none; border: none; color: rgba(255,255,255,0.28); font-family: 'Noto Sans KR', sans-serif; font-size: 0.68rem; letter-spacing: 0.1em; cursor: pointer; transition: all 0.2s; }
+.mode-btn.on { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.82); }
+.mode-sep { width: 1px; background: rgba(255,255,255,0.08); flex-shrink: 0; }
+
+.time-row { display: flex; align-items: center; gap: 14px; padding: 13px 17px; border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; background: rgba(255,255,255,0.02); margin-bottom: 16px; }
+.time-row.gone { display: none; }
+.time-lbl { font-size: 0.6rem; letter-spacing: 0.18em; color: #666; text-transform: uppercase; flex: 1; }
+.time-inp { background: none; border: none; outline: none; color: #efefef; font-family: 'Cormorant Garamond', serif; font-size: 1.6rem; font-weight: 300; color-scheme: dark; cursor: pointer; }
+
+.m-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 12px; }
+.m-row { display: flex; align-items: center; gap: 9px; padding: 12px 14px; border: 1px solid rgba(255,255,255,0.06); border-radius: 11px; background: rgba(255,255,255,0.015); transition: border-color 0.2s; }
+.m-row:focus-within { border-color: rgba(255,255,255,0.14); }
+.m-idx { font-size: 0.54rem; color: rgba(255,255,255,0.18); width: 16px; text-align: right; flex-shrink: 0; }
+.m-name-inp { flex: 1; background: none; border: none; outline: none; color: #efefef; font-family: 'Noto Sans KR', sans-serif; font-weight: 300; font-size: 0.82rem; letter-spacing: 0.03em; }
+.m-name-inp::placeholder { color: rgba(255,255,255,0.16); }
+.m-min-wrap { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
+.m-min-inp { width: 38px; background: none; border: none; outline: none; color: #bbb; font-family: 'Cormorant Garamond', serif; font-size: 1.3rem; font-weight: 300; text-align: right; -moz-appearance: textfield; }
+.m-min-inp::-webkit-outer-spin-button, .m-min-inp::-webkit-inner-spin-button { -webkit-appearance: none; }
+.m-min-lbl { font-size: 0.52rem; color: rgba(255,255,255,0.2); letter-spacing: 0.1em; }
+.m-range { font-size: 0.56rem; color: rgba(255,255,255,0.18); font-family: 'Cormorant Garamond', serif; white-space: nowrap; flex-shrink: 0; min-width: 72px; text-align: right; }
+.m-del { background: none; border: none; cursor: pointer; color: rgba(255,255,255,0.13); font-size: 0.88rem; padding: 3px 5px; transition: color 0.2s; flex-shrink: 0; }
+.m-del:hover { color: rgba(255,255,255,0.5); }
+
+.add-btn { width: 100%; padding: 12px; background: none; border: 1px dashed rgba(255,255,255,0.08); border-radius: 11px; color: rgba(255,255,255,0.2); font-family: 'Noto Sans KR', sans-serif; font-size: 0.68rem; letter-spacing: 0.16em; cursor: pointer; transition: all 0.2s; margin-bottom: 28px; }
+.add-btn:hover { border-color: rgba(255,255,255,0.2); color: rgba(255,255,255,0.5); }
+
+.s-foot { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: auto; }
+.end-info { font-size: 0.6rem; letter-spacing: 0.14em; color: #555; line-height: 1.7; }
+.end-info strong { font-family: 'Cormorant Garamond', serif; font-size: 1.25rem; font-weight: 300; color: #efefef; display: block; letter-spacing: 0.04em; }
+.go-btn { padding: 14px 32px; background: rgba(207,232,74,0.07); border: 1px solid rgba(207,232,74,0.28); border-radius: 12px; color: #cfe84a; font-family: 'Cormorant Garamond', serif; font-size: 1.2rem; letter-spacing: 0.28em; cursor: pointer; transition: all 0.22s; white-space: nowrap; }
+.go-btn:hover { background: rgba(207,232,74,0.14); border-color: rgba(207,232,74,0.5); }
+
+/* ═══════════════════════════
+   COMPLETE
+═══════════════════════════ */
+#complete {
+  position: fixed; inset: 0; z-index: 100;
+  background: #0a0a0a;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 18px; text-align: center;
+  opacity: 0; pointer-events: none; transition: opacity 0.6s;
+}
+#complete.show { opacity: 1; pointer-events: all; }
+.c-sym   { font-size: 2rem; color: rgba(255,255,255,0.1); letter-spacing: 0.6em; }
+.c-title { font-family: 'Cormorant Garamond', serif; font-size: 2.4rem; font-weight: 300; letter-spacing: 0.25em; color: rgba(255,255,255,0.6); }
+.c-sub   { font-size: 0.62rem; letter-spacing: 0.22em; color: rgba(255,255,255,0.22); text-transform: uppercase; line-height: 2.2; }
+.c-back  { margin-top: 10px; padding: 12px 28px; background: none; border: 1px solid rgba(255,255,255,0.12); border-radius: 30px; color: rgba(255,255,255,0.35); font-family: 'Noto Sans KR', sans-serif; font-size: 0.65rem; letter-spacing: 0.18em; cursor: pointer; transition: all 0.2s; }
+.c-back:hover { color: rgba(255,255,255,0.7); border-color: rgba(255,255,255,0.26); }
+</style>
+</head>
+<body>
+
+<!-- TIMER SCREEN -->
+<div id="timer" class="screen">
+  <div class="top-bar" id="topBar">
+    <div>
+      <div class="top-mission-num"  id="topNum">미션 01</div>
+      <div class="top-mission-name" id="topName">—</div>
+    </div>
+    <div class="top-time-range" id="topTime">—</div>
+  </div>
+
+  <div class="fill-block">
+    <div class="fill-color" id="fillColor"></div>
+    <div class="fill-edge"  id="fillEdge"></div>
+    <div class="fill-ghost"><div class="fill-ghost-txt" id="ghostTxt"></div></div>
+    <div class="fill-clock" id="fillClock">00:00</div>
+    <div class="settings-hint">← 설정</div>
+    <div class="tap-zone" id="tapZone"></div>
+    <div class="pause-overlay" id="pauseOverlay"><div class="pause-txt">일시정지</div></div>
+  </div>
+
+  <div class="bottom-bar" id="bottomBar">
+    <div>
+      <div class="bottom-next-label">다음 미션</div>
+      <div class="bottom-next-name" id="bottomName">—</div>
+    </div>
+    <div class="bottom-next-time" id="bottomTime">—</div>
+  </div>
+
+  <!-- Pre-start overlay -->
+  <div class="prestart" id="prestart">
+    <div class="prestart-title">TimeFlow</div>
+    <div class="prestart-sub">Morning Mission</div>
+    <div class="prestart-arrow">→ 스와이프해서 설정</div>
+  </div>
+</div>
+
+<!-- SETTINGS SCREEN -->
+<div id="settings" class="screen">
+  <div class="settings-inner">
+    <button class="back-btn" id="backFromSettings">← 타이머</button>
+    <div class="s-title">TimeFlow</div>
+    <div class="s-sub">미션 설정</div>
+
+    <div class="mode-row">
+      <button class="mode-btn on" id="btnNow">지금 바로 시작</button>
+      <div class="mode-sep"></div>
+      <button class="mode-btn" id="btnSched">시간 맞춰 시작</button>
+    </div>
+
+    <div class="time-row gone" id="timeRow">
+      <div class="time-lbl">시작 시간</div>
+      <input type="time" class="time-inp" id="timeInp">
+    </div>
+
+    <div class="m-list" id="mList"></div>
+    <button class="add-btn" id="addBtn">+ 미션 추가</button>
+
+    <div class="s-foot">
+      <div class="end-info"><strong id="endTxt">—</strong>종료 예정</div>
+      <button class="go-btn" id="goBtn">Start →</button>
+    </div>
+  </div>
+</div>
+
+<!-- COMPLETE -->
+<div id="complete">
+  <div class="c-sym">◇ ◇ ◇</div>
+  <div class="c-title">완료</div>
+  <div class="c-sub">모든 미션을 마쳤어요<br>완벽한 하루의 시작</div>
+  <button class="c-back" id="cBackBtn">처음으로</button>
+</div>
+
+<script>
+function pad(n){ return String(Math.floor(n)).padStart(2,'0'); }
+function secNow(){
+  var d=new Date(); return d.getHours()*3600+d.getMinutes()*60+d.getSeconds();
+}
+function secToStr(s){
+  s=((s%86400)+86400)%86400;
+  return pad(s/3600)+':'+pad((s%3600)/60);
+}
+function strToSec(s){ var p=s.split(':'); return parseInt(p[0])*3600+parseInt(p[1])*60; }
+
+/* ── data ── */
+var missions = JSON.parse(localStorage.getItem('tf_missions')||'null') || [
+  {name:'기상 & 스트레칭', min:5},
+  {name:'씻기',            min:10},
+  {name:'화장',            min:20},
+  {name:'옷 입기',         min:10},
+  {name:'아침 식사',       min:15}
+];
+var useSched = false;
+var timeInp  = document.getElementById('timeInp');
+timeInp.value = secToStr(secNow());
+
+/* ── navigation ── */
+var onSettings = false;
+
+function openSettings(){
+  onSettings = true;
+  document.getElementById('timer').classList.add('slide-out');
+  document.getElementById('settings').classList.add('slide-in');
+  renderSetup();
+}
+function closeSettings(){
+  onSettings = false;
+  document.getElementById('settings').classList.remove('slide-in');
+  document.getElementById('timer').classList.remove('slide-out');
+}
+
+document.getElementById('backFromSettings').onclick = function(){ closeSettings(); };
+
+/* swipe detection — only on timer screen */
+var swipeStartX=0, swipeStartY=0, swiping=false;
+document.getElementById('timer').addEventListener('touchstart', function(e){
+  swipeStartX = e.touches[0].clientX;
+  swipeStartY = e.touches[0].clientY;
+  swiping = true;
+}, {passive:true});
+document.getElementById('timer').addEventListener('touchend', function(e){
+  if(!swiping) return;
+  var dx = e.changedTouches[0].clientX - swipeStartX;
+  var dy = e.changedTouches[0].clientY - swipeStartY;
+  if(Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50){
+    if(dx < 0) openSettings(); // swipe left → settings
+  }
+  swiping = false;
+}, {passive:true});
+document.getElementById('settings').addEventListener('touchend', function(e){
+  var dx = e.changedTouches[0].clientX - swipeStartX;
+  var dy = e.changedTouches[0].clientY - swipeStartY;
+  if(Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50){
+    if(dx > 0) closeSettings(); // swipe right → timer
+  }
+}, {passive:true});
+
+/* mouse swipe for desktop */
+var msx=0;
+document.addEventListener('mousedown',function(e){ msx=e.clientX; });
+document.addEventListener('mouseup',function(e){
+  var dx=e.clientX-msx;
+  if(Math.abs(dx)<60) return;
+  if(!onSettings && dx<0) openSettings();
+  if(onSettings  && dx>0) closeSettings();
+});
+
+/* ── mode toggle ── */
+document.getElementById('btnNow').onclick = function(){
+  useSched=false;
+  document.getElementById('btnNow').classList.add('on');
+  document.getElementById('btnSched').classList.remove('on');
+  document.getElementById('timeRow').classList.add('gone');
+  renderSetup();
+};
+document.getElementById('btnSched').onclick = function(){
+  useSched=true;
+  document.getElementById('btnSched').classList.add('on');
+  document.getElementById('btnNow').classList.remove('on');
+  document.getElementById('timeRow').classList.remove('gone');
+  renderSetup();
+};
+timeInp.addEventListener('change', renderSetup);
+
+/* ── compute ranges ── */
+function computeRanges(startSec){
+  var cur=startSec;
+  return missions.map(function(m){
+    var s=cur; cur+=(parseInt(m.min)||1)*60;
+    return {s:s, e:cur, lbl:secToStr(s)+'–'+secToStr(cur)};
+  });
+}
+
+/* ── render settings ── */
+function renderSetup(){
+  var startSec = useSched ? strToSec(timeInp.value) : secNow();
+  var ranges   = computeRanges(startSec);
+  var list     = document.getElementById('mList');
+  list.innerHTML='';
+  missions.forEach(function(m,i){
+    var row=document.createElement('div'); row.className='m-row';
+    row.innerHTML=
+      '<div class="m-idx">'+pad(i+1)+'</div>'+
+      '<input class="m-name-inp" value="'+m.name+'" placeholder="미션 이름" data-i="'+i+'">'+
+      '<div class="m-min-wrap">'+
+        '<input class="m-min-inp" type="number" min="1" max="180" value="'+m.min+'" data-i="'+i+'">'+
+        '<span class="m-min-lbl">분</span>'+
+      '</div>'+
+      '<div class="m-range">'+ranges[i].lbl+'</div>'+
+      '<button class="m-del" data-i="'+i+'">✕</button>';
+    list.appendChild(row);
+  });
+  var last=ranges[ranges.length-1];
+  document.getElementById('endTxt').textContent = last ? secToStr(last.e) : '—';
+  localStorage.setItem('tf_missions',JSON.stringify(missions));
+}
+
+document.getElementById('mList').addEventListener('input',function(e){
+  var i=parseInt(e.target.dataset.i); if(isNaN(i)) return;
+  if(e.target.classList.contains('m-name-inp')) missions[i].name=e.target.value;
+  if(e.target.classList.contains('m-min-inp'))  missions[i].min=parseInt(e.target.value)||1;
+  renderSetup();
+});
+document.getElementById('mList').addEventListener('click',function(e){
+  if(e.target.classList.contains('m-del')){
+    var i=parseInt(e.target.dataset.i);
+    if(missions.length>1){ missions.splice(i,1); renderSetup(); }
+  }
+});
+document.getElementById('addBtn').onclick=function(){
+  missions.push({name:'새 미션',min:10}); renderSetup();
+  setTimeout(function(){
+    var inputs=document.querySelectorAll('.m-name-inp');
+    inputs[inputs.length-1].focus(); inputs[inputs.length-1].select();
+  },40);
+};
+
+/* ── chime ── */
+function chime(final){
+  try{
+    var ctx=new(window.AudioContext||window.webkitAudioContext)();
+    var freqs=final?[440,554,659,880]:[523,659,784];
+    freqs.forEach(function(f,i){
+      var o=ctx.createOscillator(),g=ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.type='sine'; o.frequency.value=f;
+      var t=ctx.currentTime+i*0.18;
+      g.gain.setValueAtTime(0,t);
+      g.gain.linearRampToValueAtTime(0.18,t+0.05);
+      g.gain.exponentialRampToValueAtTime(0.001,t+0.5);
+      o.start(t); o.stop(t+0.6);
+    });
+  }catch(e){}
+}
+
+/* ── timer ── */
+var ranges=[], ticker=null, paused=false, allDone=false, curMission=0, timerStarted=false;
+
+function updateTimerBars(){
+  var cur=missions[curMission], r=ranges[curMission];
+  var nxt=missions[curMission+1], rn=ranges[curMission+1];
+
+  document.getElementById('topNum').textContent  = '미션 '+pad(curMission+1);
+  document.getElementById('topName').textContent = cur ? cur.name : '—';
+  document.getElementById('topTime').textContent = r   ? r.lbl   : '—';
+  document.getElementById('ghostTxt').textContent= cur ? cur.name : '';
+
+  var bb=document.getElementById('bottomBar');
+  if(nxt){
+    bb.style.display='';
+    document.getElementById('bottomName').textContent = nxt.name;
+    document.getElementById('bottomTime').textContent = rn ? rn.lbl : '';
+  } else {
+    bb.style.display='none';
+  }
+
+  /* reset fill without transition */
+  var fc=document.getElementById('fillColor');
+  var fe=document.getElementById('fillEdge');
+  fc.style.transition='none'; fc.style.height='0%';
+  fe.style.transition='none'; fe.style.top='0%';
+  setTimeout(function(){
+    fc.style.transition='height 0.9s linear';
+    fe.style.transition='top 0.9s linear';
+  },60);
+}
+
+document.getElementById('tapZone').onclick=function(){
+  if(!timerStarted||allDone) return;
+  paused=!paused;
+  document.getElementById('pauseOverlay').classList.toggle('show',paused);
+};
+
+document.getElementById('goBtn').onclick=function(){
+  var startSec = useSched ? strToSec(timeInp.value) : secNow();
+  ranges      = computeRanges(startSec);
+  curMission  = 0;
+  paused      = false;
+  allDone     = false;
+  timerStarted= true;
+
+  document.getElementById('prestart').classList.add('gone');
+  updateTimerBars();
+  closeSettings();
+
+  clearInterval(ticker);
+  ticker=setInterval(tick,500);
+  tick();
+};
+
+function tick(){
+  if(paused||allDone) return;
+  var now=secNow();
+  var totalEnd=ranges[ranges.length-1].e;
+
+  document.getElementById('fillClock').textContent=secToStr(now);
+
+  if(now>=totalEnd){
+    allDone=true;
+    clearInterval(ticker);
+    document.getElementById('fillColor').style.height='100%';
+    document.getElementById('fillEdge').style.top='100%';
+    chime(true);
+    setTimeout(function(){ document.getElementById('complete').classList.add('show'); },900);
+    return;
+  }
+
+  /* find active mission */
+  var active=curMission;
+  for(var i=0;i<ranges.length;i++){
+    if(now>=ranges[i].s && now<ranges[i].e){ active=i; break; }
+  }
+
+  /* mission changed */
+  if(active>curMission){
+    chime(false);
+    var tb=document.getElementById('topBar');
+    var bb=document.getElementById('bottomBar');
+    tb.classList.add('away');
+    bb.classList.add('away');
+    setTimeout(function(){
+      curMission=active;
+      updateTimerBars();
+      tb.classList.remove('away');
+      bb.classList.remove('away');
+    },480);
+    return;
+  }
+
+  /* fill progress */
+  var elapsed=Math.max(0,now-ranges[curMission].s);
+  var dur=ranges[curMission].e-ranges[curMission].s;
+  var pct=dur>0?Math.min(100,elapsed/dur*100):0;
+  document.getElementById('fillColor').style.height=pct+'%';
+  document.getElementById('fillEdge').style.top=pct+'%';
+}
+
+/* ── complete ── */
+document.getElementById('cBackBtn').onclick=function(){
+  document.getElementById('complete').classList.remove('show');
+  clearInterval(ticker);
+  timerStarted=false; allDone=false;
+  document.getElementById('prestart').classList.remove('gone');
+  document.getElementById('fillColor').style.height='0%';
+  openSettings();
+};
+
+/* ── init ── */
+openSettings();
+</script>
+</body>
+</html>
