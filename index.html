@@ -15,28 +15,50 @@ html, body {
 }
 
 /* ═══════════════════════════
-   TWO SCREENS — slide transition
+   CARD FLIP
 ═══════════════════════════ */
-.screen {
+/* ── CARD FLIP ── */
+html, body {
+  perspective: 1800px;
+}
+#flip-wrap {
   position: fixed; inset: 0;
-  transition: transform 0.65s cubic-bezier(0.4,0,0.2,1),
-              opacity   0.65s cubic-bezier(0.4,0,0.2,1);
-  will-change: transform;
+}
+#flip-inner {
+  width: 100%; height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.75s cubic-bezier(0.45, 0, 0.2, 1);
+}
+#flip-inner.flipped { transform: rotateY(180deg); }
+
+/* subtle edge shadow during flip */
+#flip-inner::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, rgba(0,0,0,0.15) 0%, transparent 8%, transparent 92%, rgba(0,0,0,0.15) 100%);
+  pointer-events: none; z-index: 999;
+  opacity: 0; transition: opacity 0.75s;
 }
 
-/* TIMER: normally visible (left) */
-#timer { transform: translateX(0); background: #0a0a0a; z-index: 1; }
-#timer.slide-out { transform: translateX(-100%); }
-
-/* SETTINGS: starts off-screen right */
+.screen {
+  position: absolute; inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+#timer {
+  background: #0a0a0a;
+  transform: rotateY(0deg);
+}
+#timer.inactive { pointer-events: none; }
 #settings {
-  transform: translateX(100%);
   background: #0d0d0d;
+  transform: rotateY(-180deg);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  z-index: 2;
+  pointer-events: none;
 }
-#settings.slide-in { transform: translateX(0); }
+#settings.active { pointer-events: all; }
 
 /* ═══════════════════════════
    TIMER SCREEN
@@ -225,6 +247,7 @@ html, body {
 </head>
 <body>
 
+<div id="flip-wrap"><div id="flip-inner">
 <!-- TIMER SCREEN -->
 <div id="timer" class="screen">
   <div class="top-bar" id="topBar">
@@ -288,6 +311,7 @@ html, body {
     </div>
   </div>
 </div>
+</div></div><!-- /flip-inner /flip-wrap -->
 
 <!-- COMPLETE -->
 <div id="complete">
@@ -325,14 +349,16 @@ var onSettings = false;
 
 function openSettings(){
   onSettings = true;
-  document.getElementById('timer').classList.add('slide-out');
-  document.getElementById('settings').classList.add('slide-in');
+  document.getElementById('flip-inner').classList.add('flipped');
+  document.getElementById('settings').classList.add('active');
+  document.getElementById('timer').classList.add('inactive');
   renderSetup();
 }
 function closeSettings(){
   onSettings = false;
-  document.getElementById('settings').classList.remove('slide-in');
-  document.getElementById('timer').classList.remove('slide-out');
+  document.getElementById('flip-inner').classList.remove('flipped');
+  document.getElementById('settings').classList.remove('active');
+  document.getElementById('timer').classList.remove('inactive');
 }
 
 document.getElementById('backFromSettings').onclick = function(){ closeSettings(); };
